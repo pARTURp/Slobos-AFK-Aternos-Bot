@@ -979,6 +979,7 @@ app.post("/start", (req, res) => {
   if (botRunning) return res.json({ success: false, msg: "Already running" });
 
   botRunning = true;
+  isReconnecting = false;
   createBot();
   addLog("[Control] Bot started");
 
@@ -1361,6 +1362,9 @@ function createBot() {
 
     // FIX: 'end' is the single reconnect trigger
     bot.on("end", (reason) => {
+      if (isReconnecting) return;
+
+      isReconnecting = true;
       addLog(`[Bot] Disconnected: ${reason || "Unknown reason"}`);
       botState.connected = false;
       clearAllIntervals();
@@ -1382,11 +1386,30 @@ function createBot() {
     });
 
     bot.on("error", (err) => {
-      const msg = err.message || "";
-      addLog(`[Bot] Error: ${msg}`);
-      botState.errors.push({ type: "error", message: msg, time: Date.now() });
-      // Don't reconnect on error - let 'end' event handle it
-    });
+
+  const msg = err.message || "";
+
+  // Ignore common network disconnect errors
+  if (
+    err.code === "ECONNRESET" ||
+    err.code === "EPIPE"
+  ) {
+
+    addLog(`[Bot] Connection closed (${err.code})`);
+
+    return;
+  }
+
+  addLog(`[Bot] Error: ${msg}`);
+
+  botState.errors.push({
+    type: "error",
+    message: msg,
+    time: Date.now()
+  });
+
+  // Don't reconnect on error - let 'end' event handle it
+});
   } catch (err) {
     addLog(`[Bot] Failed to create bot: ${err.message}`);
     scheduleReconnect();
