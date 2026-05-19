@@ -2103,10 +2103,6 @@ process.on("unhandledRejection", (reason) => {
   }
 });
 
-process.on("SIGTERM", () => {
-  addLog("[System] SIGTERM received — ignoring, bot will stay alive.");
-});
-
 process.on('SIGTERM', () => {
     console.log('[System] SIGTERM received — shutting down bot.');
 
