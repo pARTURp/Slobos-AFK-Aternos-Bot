@@ -8,7 +8,7 @@ const config = require("./settings.json");
 const express = require("express");
 const http = require("http");
 const https = require("https");
-
+let reconnecting = false;
 // ============================================================
 // EXPRESS SERVER - Keep Render/Aternos alive
 // ============================================================
@@ -1174,7 +1174,7 @@ function getReconnectDelay() {
   }
 
   // FIX: read auto-reconnect-delay from settings as base delay
-  const baseDelay = config.utils["auto-reconnect-delay"] || 3000;
+  const baseDelay = config.utils["auto-reconnect-delay"] || 30000;
   const maxDelay = config.utils["max-reconnect-delay"] || 30000;
   const delay = Math.min(
     baseDelay * Math.pow(2, botState.reconnectAttempts),
@@ -1185,22 +1185,48 @@ function getReconnectDelay() {
 }
 
 function createBot() {
+  if (bot && bot._client && !bot._client.ended) {
+  addLog("[Bot] Existing bot still connected!");
+  return;
+}
   if (isReconnecting) {
     addLog("[Bot] Already reconnecting, skipping...");
     return;
   }
 
+  // FIX: prevent duplicate bot instances
+  if (bot && bot._client && !bot._client.ended) {
+    addLog("[Bot] Bot already connected, skipping createBot()");
+    return;
+  }
+
   // Cleanup previous bot properly to avoid ghost bots
   if (bot) {
-    clearAllIntervals();
-    try {
-      bot.removeAllListeners();
-      bot.end();
-    } catch (e) {
-      addLog("[Cleanup] Error ending previous bot:", e.message);
+
+  clearAllIntervals();
+
+  try {
+
+    bot.removeAllListeners();
+
+    if (bot.pathfinder) {
+      try {
+        bot.pathfinder.stop();
+      } catch (e) {}
     }
-    bot = null;
+
+    bot.quit("Reconnecting");
+
+    if (bot._client) {
+      bot._client.end();
+    }
+
+  } catch (e) {
+    addLog("[Cleanup] Error ending previous bot:", e.message);
   }
+
+  bot = null;
+}
 
   addLog(`[Bot] Creating bot instance...`);
   addLog(`[Bot] Connecting to ${config.server.ip}:${config.server.port}`);
@@ -2058,8 +2084,17 @@ process.on("SIGTERM", () => {
   addLog("[System] SIGTERM received — ignoring, bot will stay alive.");
 });
 
-process.on("SIGINT", () => {
-  addLog("[System] SIGINT received — ignoring, bot will stay alive.");
+process.on('SIGTERM', () => {
+    console.log('[System] SIGTERM received — shutting down bot.');
+
+    try {
+        if (bot) {
+            bot.quit();
+            bot.end();
+        }
+    } catch (e) {}
+
+    process.exit(0);
 });
 
 // =============================
