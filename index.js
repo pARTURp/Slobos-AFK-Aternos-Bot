@@ -1175,7 +1175,7 @@ function getReconnectDelay() {
 
   // FIX: read auto-reconnect-delay from settings as base delay
   const baseDelay = config.utils["auto-reconnect-delay"] || 30000;
-  const maxDelay = config.utils["max-reconnect-delay"] || 30000;
+  const maxDelay = config.utils["max-reconnect-delay"] || 120000;
   const delay = Math.min(
     baseDelay * Math.pow(2, botState.reconnectAttempts),
     maxDelay,
